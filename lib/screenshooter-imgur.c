@@ -32,7 +32,7 @@ static gboolean          imgur_upload_job          (ScreenshooterJob  *job,
 static gboolean
 imgur_upload_job (ScreenshooterJob *job, GArray *param_values, GError **error)
 {
-  const gchar *image_path, *title, *client_id, *client_secret, *token;
+  const gchar *image_path, *title, *auth_header;
   guchar *online_file_name = NULL;
   guchar *delete_hash = NULL;
   const gchar* proxy_uri;
@@ -55,7 +55,7 @@ imgur_upload_job (ScreenshooterJob *job, GArray *param_values, GError **error)
 
   g_return_val_if_fail (SCREENSHOOTER_IS_JOB (job), FALSE);
   g_return_val_if_fail (param_values != NULL, FALSE);
-  g_return_val_if_fail (param_values->len == 2 || param_values->len == 5, FALSE);
+  g_return_val_if_fail (param_values->len == 3, FALSE);
   g_return_val_if_fail ((G_VALUE_HOLDS_STRING (&g_array_index(param_values, GValue, 0))), FALSE);
   g_return_val_if_fail ((G_VALUE_HOLDS_STRING (&g_array_index(param_values, GValue, 1))), FALSE);
   g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
@@ -67,19 +67,8 @@ imgur_upload_job (ScreenshooterJob *job, GArray *param_values, GError **error)
 
   image_path = g_value_get_string (&g_array_index (param_values, GValue, 0));
   title = g_value_get_string (&g_array_index (param_values, GValue, 1));
-  
-  //default client_id for v3 API - key registered *only* for xfce4-screenshooter!
-  client_id = "66ab680b597e293";
-  gchar* authorization_header[64];
-  if(param_values->len == 5){
-    client_id = g_value_get_string(&g_array_index(param_values, GValue, 2));
-    client_secret = g_value_get_string(&g_array_index(param_values, GValue, 3));
-    token = g_value_get_string(&g_array_index(param_values, GValue, 4));
-    snprintf ( authorization_header, 64, "Bearer %s", token );
-  }
-  else{
-    snprintf ( authorization_header, 64, "Client-ID %s", client_id );
-  }
+  auth_header = g_value_get_string (&g_array_index (param_values, GValue, 2));
+
   session = soup_session_new ();
 #if DEBUG > 0
   log = soup_logger_new (SOUP_LOGGER_LOG_HEADERS, -1);
@@ -114,7 +103,7 @@ imgur_upload_job (ScreenshooterJob *job, GArray *param_values, GError **error)
   msg = soup_form_request_new_from_multipart (upload_url, mp);
 
 
-  soup_message_headers_append (msg->request_headers, "Authorization", authorization_header);
+  soup_message_headers_append (msg->request_headers, "Authorization", auth_header);
   exo_job_info_message (EXO_JOB (job), _("Upload the screenshot..."));
   status = soup_session_send_message (session, msg);
 
@@ -185,20 +174,18 @@ void screenshooter_upload_to_imgur   (const gchar  *image_path,
   g_return_if_fail (image_path != NULL);
 
   dialog = create_spinner_dialog(_("Imgur"), &label);
-  if(auth==NULL){
-    job = screenshooter_simple_job_launch (imgur_upload_job, 2,
-                                          G_TYPE_STRING, image_path,
-                                          G_TYPE_STRING, title);
-
-  } else {
-    job = screenshooter_simple_job_launch (imgur_upload_job, 5,
+  gchar auth_header[64];
+  if(auth == NULL){
+    //default client_id for v3 API - key registered *only* for xfce4-screenshooter!
+    sprintf(auth_header, "Client-ID 66ab680b597e293");
+  }else{
+    sprintf( auth_header, "Bearer %s", auth->token );
+  }
+  job = screenshooter_simple_job_launch (imgur_upload_job, 3,
                                           G_TYPE_STRING, image_path,
                                           G_TYPE_STRING, title,
-                                          G_TYPE_STRING, auth->client_id,
-                                          G_TYPE_STRING, auth->client_secret,
-                                          G_TYPE_STRING, auth->token
+                                          G_TYPE_STRING, auth_header
                                         );
-  } 
   /* dismiss the spinner dialog after success or error */
   g_signal_connect_swapped (job, "error", G_CALLBACK (gtk_widget_hide), dialog);
   g_signal_connect_swapped (job, "image-uploaded", G_CALLBACK (gtk_widget_hide), dialog);

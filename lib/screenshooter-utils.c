@@ -518,7 +518,6 @@ screenshooter_read_auth_file (const gchar *file, ImgurAuthInfo *auth)
 
           g_free (client_id);
           client_id = g_strdup (xfce_rc_read_entry (rc, "client_id", ""));
-          printf(client_id);
           g_free (client_secret);
           client_secret = g_strdup (xfce_rc_read_entry (rc, "client_secret", ""));
 
