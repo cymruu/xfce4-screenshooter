@@ -141,12 +141,13 @@ int main (int argc, char **argv)
   const gchar *ignore_error =
     _("The --%s option is only used when --fullscreen, --window or"
       " --region is given. It will be ignored.\n");
-
+  ImgurAuthInfo *auth = NULL;
   ScreenshotData *sd = g_new0 (ScreenshotData, 1);
   sd->plugin = FALSE;
   sd->path_is_dir = TRUE;
   sd->app_info = NULL;
   sd->action = 0;
+  sd->imgur_auth = auth;
 
   xfce_textdomain (GETTEXT_PACKAGE, PACKAGE_LOCALE_DIR, "UTF-8");
 
@@ -244,6 +245,7 @@ int main (int argc, char **argv)
     auth_file = xfce_resource_save_location(XFCE_RESOURCE_CONFIG, "xfce4/xfce4-screenshooter-auth", TRUE);
     screenshooter_read_auth_file(auth_file, auth);
     printf("Using imgur client_id: %s", auth->client_id);
+    sd->imgur_auth = auth;
   }
   /* Default to no action specified */
   sd->action_specified = FALSE;

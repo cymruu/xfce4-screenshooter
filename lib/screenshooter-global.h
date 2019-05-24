@@ -37,6 +37,13 @@ enum {
 };
 
 
+typedef struct
+{
+  gchar *client_id;
+  gchar *client_secret;
+  gchar *token;
+}
+ImgurAuthInfo;
 
 /* Struct to store the screenshot options */
 typedef struct
@@ -59,16 +66,10 @@ typedef struct
   GdkPixbuf *screenshot;
 
   gboolean use_imgur_auth;
+  ImgurAuthInfo *imgur_auth;
 }
 ScreenshotData;
 
-typedef struct
-{
-  gchar *client_id;
-  gchar *client_secret;
-  gchar *token;
-}
-ImgurAuthInfo;
 
 /* Screenshot regions */
 enum {
