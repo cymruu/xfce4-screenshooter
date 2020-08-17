@@ -124,7 +124,8 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
   gchar *title = g_strdup (_("Screenshot"));
   gchar *app = g_strdup ("none");
   gchar *last_user = g_strdup ("");
-
+  
+  gint use_imgur_auth = FALSE;
   if (G_LIKELY (file != NULL))
     {
       TRACE ("Open the rc file");
@@ -140,6 +141,8 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
           action = xfce_rc_read_int_entry (rc, "action", SAVE);
           show_mouse = xfce_rc_read_int_entry (rc, "show_mouse", 1);
           timestamp = xfce_rc_read_bool_entry (rc, "timestamp", TRUE);
+          
+          use_imgur_auth = xfce_rc_read_bool_entry(rc, "use_imgur_auth", FALSE);
 
           g_free (app);
           app = g_strdup (xfce_rc_read_entry (rc, "app", "none"));
@@ -174,6 +177,7 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
   sd->app = app;
   sd->app_info = NULL;
   sd->last_user = last_user;
+  sd->use_imgur_auth = use_imgur_auth;
 }
 
 
@@ -493,3 +497,45 @@ screenshooter_get_active_window (GdkScreen *screen,
 
   return window;
 }
+
+void
+screenshooter_read_auth_file (const gchar *file, ImgurAuthInfo *auth)
+{
+  XfceRc *rc;
+  gchar *client_id = g_strdup("");
+  gchar *client_secret = g_strdup("");
+  gchar *token = g_strdup("");
+
+  if (G_LIKELY (file != NULL))
+    {
+      TRACE ("Open the auth file");
+
+      rc = xfce_rc_simple_open (file, TRUE);
+
+      if (G_LIKELY (rc != NULL))
+        {
+          TRACE ("Read the entries");
+
+          g_free (client_id);
+          client_id = g_strdup (xfce_rc_read_entry (rc, "client_id", ""));
+          printf(client_id);
+          g_free (client_secret);
+          client_secret = g_strdup (xfce_rc_read_entry (rc, "client_secret", ""));
+
+          g_free (token);
+          token = g_strdup (xfce_rc_read_entry (rc, "token", ""));
+
+          TRACE ("Close the rc file");
+
+          xfce_rc_close (rc);
+        }
+    }
+
+  /* And set the sd values */
+  TRACE ("Set the values of the struct");
+
+  auth->client_id = client_id;
+  auth->client_secret = client_secret;
+  auth->token = token;
+}
+

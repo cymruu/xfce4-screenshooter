@@ -57,10 +57,18 @@ typedef struct
   GAppInfo *app_info;
   gchar *last_user;
   GdkPixbuf *screenshot;
+
+  gboolean use_imgur_auth;
 }
 ScreenshotData;
 
-
+typedef struct
+{
+  gchar *client_id;
+  gchar *client_secret;
+  gchar *token;
+}
+ImgurAuthInfo;
 
 /* Screenshot regions */
 enum {

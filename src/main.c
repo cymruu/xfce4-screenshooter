@@ -237,7 +237,14 @@ int main (int argc, char **argv)
   /* Read the preferences */
   rc_file = xfce_resource_save_location (XFCE_RESOURCE_CONFIG, "xfce4/xfce4-screenshooter", TRUE);
   screenshooter_read_rc_file (rc_file, sd);
-
+  if(sd->use_imgur_auth){
+    printf("Using imgur auth");
+    ImgurAuthInfo *auth = g_new0(ImgurAuthInfo, 1);
+    const gchar *auth_file;
+    auth_file = xfce_resource_save_location(XFCE_RESOURCE_CONFIG, "xfce4/xfce4-screenshooter-auth", TRUE);
+    screenshooter_read_auth_file(auth_file, auth);
+    printf("Using imgur client_id: %s", auth->client_id);
+  }
   /* Default to no action specified */
   sd->action_specified = FALSE;
 
