@@ -136,6 +136,7 @@ int main (int argc, char **argv)
   GError *cli_error = NULL;
   GFile *default_save_dir;
   const gchar *rc_file;
+  const gchar *auth_file;
   const gchar *conflict_error =
     _("Conflicting options: --%s and --%s cannot be used at the same time.\n");
   const gchar *ignore_error =
@@ -239,8 +240,7 @@ int main (int argc, char **argv)
   rc_file = xfce_resource_save_location (XFCE_RESOURCE_CONFIG, "xfce4/xfce4-screenshooter", TRUE);
   screenshooter_read_rc_file (rc_file, sd);
   if(sd->use_imgur_auth){
-    ImgurAuthInfo *auth = g_new0(ImgurAuthInfo, 1);
-    const gchar *auth_file;
+    auth = g_new0(ImgurAuthInfo, 1);
     auth_file = xfce_resource_save_location(XFCE_RESOURCE_CONFIG, "xfce4/xfce4-screenshooter-auth", TRUE);
     screenshooter_read_auth_file(auth_file, auth);
     printf("Using imgur client_id: %s", auth->client_id);

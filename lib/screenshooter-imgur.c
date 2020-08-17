@@ -170,11 +170,11 @@ void screenshooter_upload_to_imgur   (const gchar  *image_path,
 {
   ScreenshooterJob *job;
   GtkWidget *dialog, *label;
+  gchar auth_header[64];
 
   g_return_if_fail (image_path != NULL);
 
   dialog = create_spinner_dialog(_("Imgur"), &label);
-  gchar auth_header[64];
   if(auth == NULL){
     //default client_id for v3 API - key registered *only* for xfce4-screenshooter!
     sprintf(auth_header, "Client-ID 66ab680b597e293");

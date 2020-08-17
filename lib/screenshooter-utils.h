@@ -39,6 +39,8 @@
 void       screenshooter_copy_to_clipboard     (GdkPixbuf      *screenshot);
 void       screenshooter_read_rc_file          (const gchar    *file,
                                                 ScreenshotData *sd);
+void       screenshooter_read_auth_file         (const gchar *auth_file,
+                                                ImgurAuthInfo *auth);
 void       screenshooter_write_rc_file         (const gchar    *file,
                                                 ScreenshotData *sd);
 void       screenshooter_open_screenshot       (const gchar    *screenshot_path,
