@@ -177,9 +177,9 @@ void screenshooter_upload_to_imgur   (const gchar  *image_path,
   dialog = create_spinner_dialog(_("Imgur"), &label);
   if(auth == NULL){
     //default client_id for v3 API - key registered *only* for xfce4-screenshooter!
-    sprintf(auth_header, "Client-ID 66ab680b597e293");
+    g_sprintf(auth_header, "Client-ID 66ab680b597e293");
   }else{
-    sprintf( auth_header, "Bearer %s", auth->token );
+    g_sprintf( auth_header, "Bearer %s", auth->token );
   }
   job = screenshooter_simple_job_launch (imgur_upload_job, 3,
                                           G_TYPE_STRING, image_path,
