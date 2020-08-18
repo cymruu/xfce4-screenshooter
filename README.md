@@ -32,3 +32,23 @@ of `configure --help`):
 
 Bugs should be reported to the [Xfce bug tracking system](https://bugzilla.xfce.org)
 against the product xfce4-screenshooter. You will need to create an account for yourself.
+
+## How to upload images to your imgur account?
+[Register an Imgur APIv3 application](https://api.imgur.com/oauth2/addclient)
+
+In file `xfce4-screenshoter` located in `$HOME/.config/xfce4` add
+```use_imgur_auth=true```
+
+Then obtain an authorization token by sending a request to URL following this pattern
+```
+https://api.imgur.com/oauth2/authorize?client_id=YOUR_CLIENT_ID&client_secret=YOUR_SECRET&response_type=token
+```
+More information https://apidocs.imgur.com/?version=latest#authorization-and-oauth
+
+Add obtained data to `xfce4-screenshoter` configuration file:
+
+```
+client_id=yourclientid
+client_secret=yoursecret
+token=yourtoken
+```
