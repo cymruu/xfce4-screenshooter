@@ -40,7 +40,7 @@ create_spinner_dialog             (const gchar        *title,
   gtk_window_set_position (GTK_WINDOW (dialog), GTK_WIN_POS_CENTER);
   gtk_box_set_spacing (GTK_BOX (gtk_dialog_get_content_area (GTK_DIALOG (dialog))), 0);
   gtk_window_set_deletable (GTK_WINDOW (dialog), FALSE);
-  gtk_window_set_icon_name (GTK_WINDOW (dialog), "gtk-info");
+  gtk_window_set_icon_name (GTK_WINDOW (dialog), "dialog-information");
 
   /* Create the main alignment for the dialog */
   main_alignment = gtk_box_new (GTK_ORIENTATION_VERTICAL, 1);
@@ -84,11 +84,13 @@ create_spinner_dialog             (const gchar        *title,
   return dialog;
 }
 
-void cb_error (ExoJob *job, GError *error, gpointer unused)
+void cb_error (ExoJob *job, GError *error, GtkWidget *dialog)
 {
   g_return_if_fail (error != NULL);
 
   screenshooter_error ("%s", error->message);
+
+  gtk_dialog_response (GTK_DIALOG (dialog), DIALOG_RESPONSE_ERROR);
 }
 
 

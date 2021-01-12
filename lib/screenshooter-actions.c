@@ -37,8 +37,10 @@ cb_help_response (GtkWidget *dialog, gint response, gpointer unused)
 
 
 static gboolean
-action_idle (ScreenshotData *sd)
+action_idle (gpointer user_data)
 {
+  ScreenshotData *sd = user_data;
+
   if (!sd->action_specified)
     {
       GtkWidget *dialog = screenshooter_actions_dialog_new (sd);
@@ -74,7 +76,7 @@ action_idle (ScreenshotData *sd)
         screenshooter_save_screenshot_to (sd->screenshot, sd->screenshot_dir);
       else
         {
-          const gchar *save_location;
+          const gchar *save_location, *temp;
 
           if (sd->screenshot_dir == NULL)
             sd->screenshot_dir = screenshooter_get_xdg_image_dir_uri ();
@@ -86,39 +88,44 @@ action_idle (ScreenshotData *sd)
                                                          TRUE,
                                                          TRUE);
 
-          if (save_location)
-            {
-              const gchar *temp;
+          if (save_location == NULL)
+              return TRUE; /* Show actions dialog again */
 
-              g_free (sd->screenshot_dir);
-              temp = g_path_get_dirname (save_location);
-              sd->screenshot_dir = g_build_filename ("file://", temp, NULL);
-              TRACE ("New save directory: %s", sd->screenshot_dir);
-            }
+          g_free (sd->screenshot_dir);
+          temp = g_path_get_dirname (save_location);
+          sd->screenshot_dir = g_build_filename ("file://", temp, NULL);
+          TRACE ("New save directory: %s", sd->screenshot_dir);
         }
     }
   else
     {
       GFile *temp_dir = g_file_new_for_path (g_get_tmp_dir ());
-      const gchar *temp_dir_uri = g_file_get_uri (temp_dir);
-      const gchar *screenshot_path =
+      gchar *temp_dir_uri = g_file_get_uri (temp_dir);
+      gchar *screenshot_path =
         screenshooter_save_screenshot (sd->screenshot,
                                        temp_dir_uri,
                                        sd->title,
                                        sd->timestamp,
                                        FALSE,
                                        FALSE);
+      g_object_unref (temp_dir);
+      g_free (temp_dir_uri);
 
       if (screenshot_path != NULL)
         {
           if (sd->action & OPEN)
             screenshooter_open_screenshot (screenshot_path, sd->app, sd->app_info);
-          else if (sd->action & UPLOAD_IMGUR){
-            screenshooter_upload_to_imgur (screenshot_path, sd->title, sd->imgur_auth);
-          }
-        }
+          else if (sd->action & UPLOAD_IMGUR)
+            {
+              if (!screenshooter_upload_to_imgur (screenshot_path, sd->title, sd->imgur_auth))
+                {
+                  g_free (screenshot_path);
+                  return TRUE; /* Show actions dialog again */
+                }
+            }
 
-      g_object_unref (temp_dir);
+          g_free (screenshot_path);
+        }
     }
 
   if (!sd->plugin)
@@ -132,15 +139,17 @@ action_idle (ScreenshotData *sd)
 
 
 static gboolean
-take_screenshot_idle (ScreenshotData *sd)
+take_screenshot_idle (gpointer user_data)
 {
+  ScreenshotData *sd = user_data;
+
   sd->screenshot = screenshooter_capture_screenshot (sd->region,
                                                   sd->delay,
                                                   sd->show_mouse,
                                                   sd->plugin);
 
   if (sd->screenshot != NULL)
-    g_idle_add ((GSourceFunc) action_idle, sd);
+    g_idle_add (action_idle, sd);
   else if (!sd->plugin)
     gtk_main_quit ();
 
@@ -161,7 +170,7 @@ screenshooter_take_screenshot (ScreenshotData *sd, gboolean immediate)
   if (sd->region == SELECT)
     {
       /* The delay will be applied after the rectangle selection */
-      g_idle_add ((GSourceFunc) take_screenshot_idle, sd);
+      g_idle_add (take_screenshot_idle, sd);
       return;
     }
 
@@ -170,7 +179,7 @@ screenshooter_take_screenshot (ScreenshotData *sd, gboolean immediate)
       /* If delay is zero and the region was passed as an argument (from cli
        * or panel plugin), thus the first dialog was not shown, we will take
        * the screenshot immediately without a minimal delay */
-      g_idle_add ((GSourceFunc) take_screenshot_idle, sd);
+      g_idle_add (take_screenshot_idle, sd);
       return;
     }
 
@@ -178,5 +187,5 @@ screenshooter_take_screenshot (ScreenshotData *sd, gboolean immediate)
    * screenshot, but not less than 200ms, otherwise the first dialog might
    * appear on the screenshot. */
   delay = sd->delay == 0 ? 200 : sd->delay * 1000;
-  g_timeout_add (delay, (GSourceFunc) take_screenshot_idle, sd);
+  g_timeout_add (delay, take_screenshot_idle, sd);
 }

@@ -69,13 +69,21 @@ static GdkPixbuf       *get_cursor_pixbuf                   (GdkDisplay *display
                                                              gint *cursory,
                                                              gint *xhot,
                                                              gint *yhot);
+static void             capture_cursor                      (GdkPixbuf      *screenshot,
+                                                             GtkBorder      *window_extents,
+                                                             gint            scale,
+                                                             gint            x,
+                                                             gint            y,
+                                                             gint            w,
+                                                             gint            h);
 static GdkPixbuf       *get_window_screenshot               (GdkWindow      *window,
                                                              gboolean        show_mouse,
                                                              gboolean        border);
 static GdkFilterReturn  region_filter_func                  (GdkXEvent      *xevent,
                                                              GdkEvent       *event,
                                                              RbData         *rbdata);
-static GdkPixbuf       *get_rectangle_screenshot            (gint delay);
+static GdkPixbuf       *get_rectangle_screenshot            (gint            delay,
+                                                             gboolean        show_mouse);
 static gboolean         cb_key_pressed                      (GtkWidget      *widget,
                                                              GdkEventKey    *event,
                                                              RubberBandData *rbdata);
@@ -94,12 +102,12 @@ static gboolean         cb_button_released                  (GtkWidget      *wid
 static gboolean         cb_motion_notify                    (GtkWidget      *widget,
                                                              GdkEventMotion *event,
                                                              RubberBandData *rbdata);
-static GdkPixbuf       *get_rectangle_screenshot_composited (gint delay);
+static GdkPixbuf       *get_rectangle_screenshot_composited (gint            delay,
+                                                             gboolean        show_mouse);
 
 
 
 /* Internals */
-
 
 
 static Window
@@ -230,6 +238,75 @@ fallback:
 }
 
 
+
+static void capture_cursor (GdkPixbuf *screenshot,
+                            GtkBorder *window_extents,
+                            gint scale,
+                            gint x,
+                            gint y,
+                            gint w,
+                            gint h)
+{
+  gint cursorx, cursory, xhot, yhot;
+  GdkPixbuf *cursor_pixbuf;
+  GdkRectangle rectangle_window, rectangle_cursor;
+
+  cursor_pixbuf = get_cursor_pixbuf (gdk_display_get_default (),
+                                     gdk_get_default_root_window (),
+                                     &cursorx, &cursory, &xhot, &yhot);
+
+  if (G_UNLIKELY (cursor_pixbuf == NULL))
+    return;
+
+  /* rectangle_window stores the window coordinates */
+  rectangle_window.x = x * scale;
+  rectangle_window.y = y * scale;
+  rectangle_window.width = w * scale;
+  rectangle_window.height = h * scale;
+
+  if (window_extents != NULL)
+    {
+      rectangle_window.x += window_extents->left - 1;
+      rectangle_window.y += window_extents->top - 1;
+      rectangle_window.width -= window_extents->left + window_extents->right + 2;
+      rectangle_window.height -= window_extents->top + window_extents->bottom + 2;
+    }
+
+  /* rectangle_cursor stores the cursor coordinates */
+  rectangle_cursor.x = cursorx;
+  rectangle_cursor.y = cursory;
+  rectangle_cursor.width = gdk_pixbuf_get_width (cursor_pixbuf);
+  rectangle_cursor.height = gdk_pixbuf_get_height (cursor_pixbuf);
+
+  /* see if the pointer is inside the window */
+  if (gdk_rectangle_intersect (&rectangle_window,
+                               &rectangle_cursor,
+                               &rectangle_cursor))
+    {
+      int dest_x, dest_y;
+
+      TRACE ("Compose the two pixbufs");
+
+      dest_x = cursorx - rectangle_window.x - xhot;
+      dest_y = cursory - rectangle_window.y - yhot;
+
+      gdk_pixbuf_composite (cursor_pixbuf, screenshot,
+                            CLAMP (dest_x, 0, dest_x),
+                            CLAMP (dest_y, 0, dest_y),
+                            rectangle_cursor.width,
+                            rectangle_cursor.height,
+                            dest_x,
+                            dest_y,
+                            1.0, 1.0,
+                            GDK_INTERP_BILINEAR,
+                            255);
+    }
+
+  g_object_unref (cursor_pixbuf);
+}
+
+
+
 static GdkPixbuf
 *get_window_screenshot (GdkWindow *window,
                         gboolean show_mouse,
@@ -244,11 +321,16 @@ static GdkPixbuf
   gint scale;
   GdkRectangle rectangle;
   GdkRectangle screen_geometry;
+  GtkBorder extents;
+  gboolean has_extents;
 
   /* Get the root window */
   TRACE ("Get the root window");
 
   root = gdk_get_default_root_window ();
+
+  if (has_extents = screenshooter_get_gtk_frame_extents (window, &extents))
+    border = FALSE;
 
   if (border)
     {
@@ -297,7 +379,20 @@ static GdkPixbuf
 
   TRACE ("Grab the screenshot");
 
-  screenshot = gdk_pixbuf_get_from_window (root, x_orig, y_orig, width, height);
+  if (!has_extents)
+    screenshot = gdk_pixbuf_get_from_window (root, x_orig, y_orig, width, height);
+  else
+    {
+      GdkRectangle rect;
+      gdk_window_get_frame_extents (window, &rect);
+
+      /* Add one pixel to sides so the border is visible */
+      rect.x = extents.left - 1;
+      rect.y = extents.top - 1;
+      rect.width -= extents.left + extents.right - 2;
+      rect.height -= extents.top + extents.bottom - 2;
+      screenshot = gdk_pixbuf_get_from_window (window, rect.x, rect.y, rect.width, rect.height);
+    }
 
   /* Code adapted from gnome-screenshot:
    * Copyright (C) 2001-2006  Jonathan Blandford <jrb@alum.mit.edu>
@@ -400,59 +495,8 @@ static GdkPixbuf
     }
 
   if (show_mouse)
-    {
-        gint cursorx, cursory, xhot, yhot;
-        GdkPixbuf *cursor_pixbuf;
-        GdkDisplay *display = gdk_display_get_default ();
-
-        cursor_pixbuf = get_cursor_pixbuf (display, root, &cursorx, &cursory,
-                                           &xhot, &yhot);
-
-        if (G_LIKELY (cursor_pixbuf != NULL))
-          {
-            GdkRectangle rectangle_window, rectangle_cursor;
-
-            /* rectangle_window stores the window coordinates */
-            rectangle_window.x = x_orig * scale;
-            rectangle_window.y = y_orig * scale;
-            rectangle_window.width = width * scale;
-            rectangle_window.height = height * scale;
-
-            /* rectangle_cursor stores the cursor coordinates */
-            rectangle_cursor.x = cursorx;
-            rectangle_cursor.y = cursory;
-            rectangle_cursor.width =
-              gdk_pixbuf_get_width (cursor_pixbuf);
-            rectangle_cursor.height =
-              gdk_pixbuf_get_height (cursor_pixbuf);
-
-            /* see if the pointer is inside the window */
-            if (gdk_rectangle_intersect (&rectangle_window,
-                                         &rectangle_cursor,
-                                         &rectangle_cursor))
-              {
-                int dest_x, dest_y;
-
-                TRACE ("Compose the two pixbufs");
-
-                dest_x = cursorx - rectangle_window.x - xhot;
-                dest_y = cursory - rectangle_window.y - yhot;
-
-                gdk_pixbuf_composite (cursor_pixbuf, screenshot,
-                                      CLAMP (dest_x, 0, dest_x),
-                                      CLAMP (dest_y, 0, dest_y),
-                                      rectangle_cursor.width,
-                                      rectangle_cursor.height,
-                                      dest_x,
-                                      dest_y,
-                                      1.0, 1.0,
-                                      GDK_INTERP_BILINEAR,
-                                      255);
-              }
-
-            g_object_unref (cursor_pixbuf);
-          }
-    }
+    capture_cursor (screenshot, has_extents ? &extents : NULL,
+                    scale, x_orig, y_orig, width, height);
 
   return screenshot;
 }
@@ -596,9 +640,9 @@ static gboolean cb_button_released (GtkWidget *widget,
     {
       if (rbdata->rubber_banding)
         {
-          gtk_dialog_response (GTK_DIALOG (widget), GTK_RESPONSE_NONE);
           gtk_widget_destroy (rbdata->size_window);
           rbdata->size_window = NULL;
+          gtk_dialog_response (GTK_DIALOG (widget), GTK_RESPONSE_NONE);
           return TRUE;
         }
       else
@@ -728,26 +772,6 @@ static gboolean cb_motion_notify (GtkWidget *widget,
           old_rect.y = new_rect->y;
           old_rect.width = new_rect->width;
           old_rect.height = new_rect->height;
-
-          rect_width = old_rect.width;
-          rect_height = old_rect.height;
-
-          /* Take into account when the rectangle is moved out of screen */
-          if (old_rect.x < 0) rect_width += old_rect.x;
-          if (old_rect.y < 0) rect_height += old_rect.y;
-
-          coords = g_strdup_printf ("%d x %d", rect_width, rect_height);
-
-          size_window_get_offset (rbdata->size_window, strlen (coords),
-                                  event->x, event->y,
-                                  &x_offset, &y_offset);
-
-          gtk_window_move (GTK_WINDOW (rbdata->size_window),
-                           event->x + x_offset,
-                           event->y + y_offset);
-
-          gtk_label_set_text (GTK_LABEL (rbdata->size_label), coords);
-          g_free (coords);
         }
 
       if (rbdata->move_rectangle)
@@ -779,6 +803,26 @@ static gboolean cb_motion_notify (GtkWidget *widget,
           new_rect->width = ABS (rbdata->x - event->x) + 1;
           new_rect->height = ABS (rbdata->y - event->y) + 1;
         }
+
+      rect_width = new_rect->width;
+      rect_height = new_rect->height;
+
+      /* Take into account when the rectangle is moved out of screen */
+      if (new_rect->x < 0) rect_width += new_rect->x;
+      if (new_rect->y < 0) rect_height += new_rect->y;
+
+      coords = g_strdup_printf ("%d x %d", rect_width, rect_height);
+
+      size_window_get_offset (rbdata->size_window, strlen (coords),
+                              event->x, event->y,
+                              &x_offset, &y_offset);
+
+      gtk_window_move (GTK_WINDOW (rbdata->size_window),
+                       event->x + x_offset,
+                       event->y + y_offset);
+
+      gtk_label_set_text (GTK_LABEL (rbdata->size_label), coords);
+      g_free (coords);
 
       region = cairo_region_create_rectangle (&old_rect);
       cairo_region_union_rectangle (region, new_rect);
@@ -812,10 +856,11 @@ static gboolean cb_motion_notify (GtkWidget *widget,
 
 
 static GdkPixbuf
-*capture_rectangle_screenshot (gint x, gint y, gint w, gint h, gint delay)
+*capture_rectangle_screenshot (gint x, gint y, gint w, gint h, gint delay, gboolean show_mouse)
 {
   GdkWindow *root;
   int root_width, root_height;
+  GdkPixbuf *screenshot;
 
   root = gdk_get_default_root_window ();
   root_width = gdk_window_get_width (root);
@@ -841,7 +886,12 @@ static GdkPixbuf
   else
     sleep (delay);
 
-  return gdk_pixbuf_get_from_window (root, x, y, w, h);
+  screenshot = gdk_pixbuf_get_from_window (root, x, y, w, h);
+
+  if (show_mouse)
+    capture_cursor (screenshot, NULL, gdk_window_get_scale_factor (root), x, y, w, h);
+
+  return screenshot;
 }
 
 
@@ -870,7 +920,7 @@ try_grab (GdkSeat *seat, GdkWindow *window, GdkCursor *cursor)
 
 
 static GdkPixbuf
-*get_rectangle_screenshot_composited (gint delay)
+*get_rectangle_screenshot_composited (gint delay, gboolean show_mouse)
 {
   GtkWidget *window;
   RubberBandData rbdata;
@@ -964,7 +1014,7 @@ static GdkPixbuf
                                              rbdata.rectangle.y,
                                              rbdata.rectangle.width,
                                              rbdata.rectangle.height,
-                                             delay);
+                                             delay, show_mouse);
 
   cleanup:
   if (rbdata.size_window)
@@ -1214,7 +1264,7 @@ region_filter_func (GdkXEvent *xevent, GdkEvent *event, RbData *rbdata)
 
 
 static GdkPixbuf
-*get_rectangle_screenshot (gint delay)
+*get_rectangle_screenshot (gint delay, gboolean show_mouse)
 {
   GdkPixbuf *screenshot = NULL;
   GdkWindow *root_window;
@@ -1308,7 +1358,7 @@ static GdkPixbuf
                                                  rbdata.rectangle.y,
                                                  rbdata.rectangle.width,
                                                  rbdata.rectangle.height,
-                                                 delay);
+                                                 delay, show_mouse);
     }
 
   if (G_LIKELY (gc != NULL))
@@ -1354,56 +1404,40 @@ GdkPixbuf *screenshooter_capture_screenshot (gint     region,
   GdkWindow *window = NULL;
   GdkScreen *screen;
   GdkDisplay *display;
-  gboolean border;
 
-  /* gdk_get_default_root_window () does not need to be unrefed,
-   * needs_unref enables us to unref *window only if a non default
-   * window has been grabbed. */
-  gboolean needs_unref = TRUE;
-
-  /* Get the screen on which the screenshot should be captured */
   screen = gdk_screen_get_default ();
+  display = gdk_display_get_default ();
 
   /* Sync the display */
-  display = gdk_display_get_default ();
   gdk_display_sync (display);
 
 G_GNUC_BEGIN_IGNORE_DEPRECATIONS
   gdk_window_process_all_updates ();
 G_GNUC_END_IGNORE_DEPRECATIONS
 
-  /* Get the window/desktop we want to screenshot*/
   if (region == FULLSCREEN)
     {
-      TRACE ("We grab the entire screen");
-
+      TRACE ("Get the screenshot of the entire window");
       window = gdk_get_default_root_window ();
-      needs_unref = FALSE;
-      border = FALSE;
+      screenshot = get_window_screenshot (window, show_mouse, FALSE);
     }
   else if (region == ACTIVE_WINDOW)
     {
-      TRACE ("We grab the active window");
+      gboolean border;
+      gboolean needs_unref = TRUE;
 
+      TRACE ("Get the screenshot of the active window");
       window = screenshooter_get_active_window (screen, &needs_unref, &border);
-    }
-
-  if (region == FULLSCREEN || region == ACTIVE_WINDOW)
-    {
-      TRACE ("Get the screenshot of the given window");
-
       screenshot = get_window_screenshot (window, show_mouse, border);
-
       if (needs_unref)
         g_object_unref (window);
     }
   else if (region == SELECT)
     {
       TRACE ("Let the user select the region to screenshot");
-      if (!gdk_screen_is_composited (screen))
-        screenshot = get_rectangle_screenshot (delay);
-      else
-        screenshot = get_rectangle_screenshot_composited (delay);
+      screenshot = gdk_screen_is_composited (screen) ?
+                    get_rectangle_screenshot_composited (delay, show_mouse) :
+                    get_rectangle_screenshot (delay, show_mouse);
     }
 
   return screenshot;

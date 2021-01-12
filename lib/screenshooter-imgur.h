@@ -30,8 +30,8 @@
 #include "screenshooter-utils.h"
 #include "screenshooter-simple-job.h"
 
-void screenshooter_upload_to_imgur (const gchar  *image_path,
-                                    const gchar  *title,
-                                    const ImgurAuthInfo *auth);
+gboolean screenshooter_upload_to_imgur (const gchar  *image_path,
+                                        const gchar  *title,
+                                        const ImgurAuthInfo *auth);
 
 #endif

@@ -126,6 +126,8 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
   gchar *last_user = g_strdup ("");
   
   gint use_imgur_auth = FALSE;
+  gboolean enable_imgur_upload = TRUE;
+
   if (G_LIKELY (file != NULL))
     {
       TRACE ("Open the rc file");
@@ -143,6 +145,7 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
           timestamp = xfce_rc_read_bool_entry (rc, "timestamp", TRUE);
           
           use_imgur_auth = xfce_rc_read_bool_entry(rc, "use_imgur_auth", FALSE);
+          enable_imgur_upload = xfce_rc_read_bool_entry (rc, "enable_imgur_upload", TRUE);
 
           g_free (app);
           app = g_strdup (xfce_rc_read_entry (rc, "app", "none"));
@@ -178,6 +181,7 @@ screenshooter_read_rc_file (const gchar *file, ScreenshotData *sd)
   sd->app_info = NULL;
   sd->last_user = last_user;
   sd->use_imgur_auth = use_imgur_auth;
+  sd->enable_imgur_upload = enable_imgur_upload;
 }
 
 
@@ -204,6 +208,7 @@ screenshooter_write_rc_file (const gchar *file, ScreenshotData *sd)
   xfce_rc_write_entry (rc, "app", sd->app);
   xfce_rc_write_entry (rc, "last_user", sd->last_user);
   xfce_rc_write_entry (rc, "screenshot_dir", sd->screenshot_dir);
+  xfce_rc_write_bool_entry (rc, "enable_imgur_upload", sd->enable_imgur_upload);
 
   /* do not save if action was specified from cli */
   if (!sd->action_specified)
@@ -345,6 +350,8 @@ void screenshooter_error (const gchar *format, ...)
   dialog = gtk_message_dialog_new (NULL, GTK_DIALOG_MODAL,
                                    GTK_MESSAGE_ERROR, GTK_BUTTONS_OK,
                                    NULL);
+  gtk_window_set_title (GTK_WINDOW (dialog), _("Error"));
+  gtk_window_set_icon_name (GTK_WINDOW (dialog), "dialog-error");
   gtk_message_dialog_set_markup (GTK_MESSAGE_DIALOG (dialog), message);
 
   gtk_dialog_run (GTK_DIALOG (dialog));
@@ -538,3 +545,60 @@ screenshooter_read_auth_file (const gchar *file, ImgurAuthInfo *auth)
   auth->token = token;
 }
 
+
+
+gboolean
+screenshooter_get_gtk_frame_extents (GdkWindow *window,
+                                     GtkBorder *extents)
+{
+#if LIBXFCE4UI_CHECK_VERSION (4,16,0)
+  return xfce_has_gtk_frame_extents (window, extents);
+#else
+  /* Code adapted from gnome-flashback:
+   * Copyright (C) 2015-2017 Alberts Muktupāvels
+   * https://gitlab.gnome.org/GNOME/gnome-flashback/-/commit/f884127
+   */
+
+  GdkDisplay *display;
+  Display *xdisplay;
+  Window xwindow;
+  Atom gtk_frame_extents;
+  Atom type;
+  gint format;
+  gulong n_items;
+  gulong bytes_after;
+  guchar *data;
+  gint result;
+  gulong *borders;
+
+  display = gdk_display_get_default ();
+  xdisplay = gdk_x11_display_get_xdisplay (display);
+  xwindow = gdk_x11_window_get_xid (window);
+  gtk_frame_extents = XInternAtom (xdisplay, "_GTK_FRAME_EXTENTS", False);
+
+  gdk_x11_display_error_trap_push (display);
+  result = XGetWindowProperty (xdisplay, xwindow, gtk_frame_extents,
+                               0, G_MAXLONG, False, XA_CARDINAL,
+                               &type, &format, &n_items, &bytes_after, &data);
+  gdk_x11_display_error_trap_pop_ignored (display);
+
+  if (data == NULL)
+    return FALSE;
+
+  if (result != Success || type != XA_CARDINAL || format != 32 || n_items != 4)
+    {
+      XFree (data);
+      return FALSE;
+    }
+
+  borders = (gulong *) data;
+
+  extents->left = borders[0];
+  extents->right = borders[1];
+  extents->top = borders[2];
+  extents->bottom = borders[3];
+
+  XFree (data);
+  return TRUE;
+#endif
+}

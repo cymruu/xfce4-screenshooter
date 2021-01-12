@@ -35,6 +35,9 @@ static void
 cb_rectangle_toggled               (GtkToggleButton    *tb,
                                     ScreenshotData     *sd);
 static void
+cb_radiobutton_activate            (GtkToggleButton    *tb,
+                                    GtkWidget          *widget);
+static void
 cb_show_mouse_toggled              (GtkToggleButton    *tb,
                                     ScreenshotData     *sd);
 static void
@@ -42,9 +45,6 @@ cb_save_toggled                    (GtkToggleButton    *tb,
                                     ScreenshotData     *sd);
 static void
 cb_toggle_set_sensi                (GtkToggleButton    *tb,
-                                    GtkWidget          *widget);
-static void
-cb_toggle_set_insensi              (GtkToggleButton    *tb,
                                     GtkWidget          *widget);
 static void
 cb_open_toggled                    (GtkToggleButton    *tb,
@@ -127,6 +127,14 @@ static void cb_rectangle_toggled (GtkToggleButton *tb, ScreenshotData *sd)
 
 
 
+/* Confirm the selected screenshot options and proceed to capture */
+static void cb_radiobutton_activate (GtkToggleButton *tb, GtkWidget *widget)
+{
+  gtk_dialog_response (GTK_DIALOG (widget), GTK_RESPONSE_OK);
+}
+
+
+
 /* Set whether the mouse should be captured when the button is toggled */
 static void cb_show_mouse_toggled (GtkToggleButton *tb, ScreenshotData   *sd)
 {
@@ -152,15 +160,6 @@ static void
 cb_toggle_set_sensi (GtkToggleButton *tb, GtkWidget *widget)
 {
   gtk_widget_set_sensitive (widget, gtk_toggle_button_get_active (tb));
-}
-
-
-
-/* Set the widget active if the toggle button is inactive */
-static void
-cb_toggle_set_insensi (GtkToggleButton *tb, GtkWidget *widget)
-{
-  gtk_widget_set_sensitive (widget, !gtk_toggle_button_get_active (tb));
 }
 
 
@@ -779,6 +778,9 @@ GtkWidget *screenshooter_region_dialog_new (ScreenshotData *sd, gboolean plugin)
   g_signal_connect (G_OBJECT (fullscreen_button), "toggled",
                     G_CALLBACK (cb_fullscreen_screen_toggled),
                     sd);
+  g_signal_connect (G_OBJECT (fullscreen_button), "activate",
+                    G_CALLBACK (cb_radiobutton_activate),
+                    dlg);
 
   /* Active window */
   active_window_button =
@@ -794,6 +796,9 @@ GtkWidget *screenshooter_region_dialog_new (ScreenshotData *sd, gboolean plugin)
   g_signal_connect (G_OBJECT (active_window_button), "toggled",
                     G_CALLBACK (cb_active_window_toggled),
                     sd);
+  g_signal_connect (G_OBJECT (active_window_button), "activate",
+                    G_CALLBACK (cb_radiobutton_activate),
+                    dlg);
 
   /* Rectangle */
   rectangle_button =
@@ -806,17 +811,20 @@ GtkWidget *screenshooter_region_dialog_new (ScreenshotData *sd, gboolean plugin)
                                _("Select a region to be captured by clicking a point of "
                                  "the screen without releasing the mouse button, "
                                  "dragging your mouse to the other corner of the region, "
-                                 "and releasing the mouse button."));
+                                 "and releasing the mouse button.\n\n"
+                                 "Press Ctrl while dragging to move the region."));
 
   g_signal_connect (G_OBJECT (rectangle_button), "toggled",
                     G_CALLBACK (cb_rectangle_toggled), sd);
+  g_signal_connect (G_OBJECT (rectangle_button), "activate",
+                    G_CALLBACK (cb_radiobutton_activate),
+                    dlg);
 
   /* Create show mouse checkbox */
   show_mouse_checkbox =
     gtk_check_button_new_with_label (_("Capture the mouse pointer"));
   gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (show_mouse_checkbox),
                                 (sd->show_mouse == 1));
-  gtk_widget_set_sensitive (show_mouse_checkbox, (sd->region != SELECT));
   gtk_widget_set_tooltip_text (show_mouse_checkbox,
                                _("Display the mouse pointer on the screenshot"));
   gtk_box_pack_start (GTK_BOX (area_box),
@@ -824,8 +832,6 @@ GtkWidget *screenshooter_region_dialog_new (ScreenshotData *sd, gboolean plugin)
                       FALSE, 5);
   g_signal_connect (G_OBJECT (show_mouse_checkbox), "toggled",
                     G_CALLBACK (cb_show_mouse_toggled), sd);
-  g_signal_connect (G_OBJECT (rectangle_button), "toggled",
-                    G_CALLBACK (cb_toggle_set_insensi), show_mouse_checkbox);
 
   /* Create the main box for the delay stuff */
   delay_main_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 6);
@@ -997,6 +1003,8 @@ GtkWidget *screenshooter_actions_dialog_new (ScreenshotData *sd)
                                 (sd->action & SAVE));
   g_signal_connect (G_OBJECT (save_radio_button), "toggled",
                     G_CALLBACK (cb_save_toggled), sd);
+  g_signal_connect (G_OBJECT (save_radio_button), "activate",
+                    G_CALLBACK (cb_radiobutton_activate), dlg);
   gtk_widget_set_tooltip_text (save_radio_button, _("Save the screenshot to a PNG file"));
   gtk_grid_attach (GTK_GRID (actions_grid), save_radio_button, 0, 0, 1, 1);
 
@@ -1014,6 +1022,8 @@ GtkWidget *screenshooter_actions_dialog_new (ScreenshotData *sd)
                                     (sd->action & CLIPBOARD));
       g_signal_connect (G_OBJECT (clipboard_radio_button), "toggled",
                         G_CALLBACK (cb_clipboard_toggled), sd);
+      g_signal_connect (G_OBJECT (clipboard_radio_button), "activate",
+                        G_CALLBACK (cb_radiobutton_activate), dlg);
       gtk_grid_attach (GTK_GRID (actions_grid), clipboard_radio_button, 0, 1, 1, 1);
     }
 
@@ -1025,6 +1035,8 @@ GtkWidget *screenshooter_actions_dialog_new (ScreenshotData *sd)
                                 (sd->action & OPEN));
   g_signal_connect (G_OBJECT (open_with_radio_button), "toggled",
                     G_CALLBACK (cb_open_toggled), sd);
+  g_signal_connect (G_OBJECT (open_with_radio_button), "activate",
+                    G_CALLBACK (cb_radiobutton_activate), dlg);
   gtk_widget_set_tooltip_text (open_with_radio_button,
                                _("Open the screenshot with the chosen application"));
   gtk_grid_attach (GTK_GRID (actions_grid), open_with_radio_button, 0, 2, 1, 1);
@@ -1053,43 +1065,48 @@ GtkWidget *screenshooter_actions_dialog_new (ScreenshotData *sd)
   cb_toggle_set_sensi (GTK_TOGGLE_BUTTON (open_with_radio_button), combobox);
 
   /* Upload to imgur radio button */
-  hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 4);
-  gtk_grid_attach (GTK_GRID (actions_grid), hbox, 0, 4, 1, 1);
+  if (sd->enable_imgur_upload)
+    {
+    hbox = gtk_box_new (GTK_ORIENTATION_HORIZONTAL, 4);
+    gtk_grid_attach (GTK_GRID (actions_grid), hbox, 0, 4, 1, 1);
 
-  imgur_radio_button =
-    gtk_radio_button_new_with_label_from_widget (GTK_RADIO_BUTTON (save_radio_button),
-                                                 _("Host on Imgur"));
-  gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (imgur_radio_button),
+    imgur_radio_button =
+      gtk_radio_button_new_with_label_from_widget (GTK_RADIO_BUTTON (save_radio_button),
+                                                   _("Host on Imgur"));
+    gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (imgur_radio_button),
                                 (sd->action & UPLOAD_IMGUR));
-  gtk_widget_set_tooltip_text (imgur_radio_button,
-                               _("Host the screenshot on Imgur, a free online "
-                                 "image hosting service"));
-  g_signal_connect (G_OBJECT (imgur_radio_button), "toggled",
-                    G_CALLBACK (cb_imgur_toggled), sd);
-  gtk_container_add (GTK_CONTAINER (hbox), imgur_radio_button);
+    gtk_widget_set_tooltip_text (imgur_radio_button,
+                                 _("Host the screenshot on Imgur, a free online "
+                                   "image hosting service"));
+    g_signal_connect (G_OBJECT (imgur_radio_button), "toggled",
+                      G_CALLBACK (cb_imgur_toggled), sd);
+    g_signal_connect (G_OBJECT (imgur_radio_button), "activate",
+                      G_CALLBACK (cb_radiobutton_activate), dlg);
+    gtk_container_add (GTK_CONTAINER (hbox), imgur_radio_button);
 
-  /* Upload to imgur warning info */
-  imgur_warning_image = gtk_image_new_from_icon_name ("dialog-warning",
-                                                      GTK_ICON_SIZE_BUTTON);
-  imgur_warning_label = gtk_label_new (
-    _("Watch for sensitive content, the uploaded image will be publicly\n"
-      "available and there is no guarantee it can be certainly deleted."));
+    /* Upload to imgur warning info */
+    imgur_warning_image = gtk_image_new_from_icon_name ("dialog-warning",
+                                                        GTK_ICON_SIZE_BUTTON);
+    imgur_warning_label = gtk_label_new (
+      _("Watch for sensitive content, the uploaded image will be publicly\n"
+        "available and there is no guarantee it can be certainly deleted."));
 
-  popover = gtk_popover_new (imgur_warning_image);
-  gtk_container_add (GTK_CONTAINER (popover), imgur_warning_label);
-  gtk_container_set_border_width (GTK_CONTAINER (popover), 6);
-  gtk_widget_show (imgur_warning_label);
+    popover = gtk_popover_new (imgur_warning_image);
+    gtk_container_add (GTK_CONTAINER (popover), imgur_warning_label);
+    gtk_container_set_border_width (GTK_CONTAINER (popover), 6);
+    gtk_widget_show (imgur_warning_label);
 
-  evbox = gtk_event_box_new ();
-  g_signal_connect_swapped (G_OBJECT (evbox), "button-press-event",
-                            G_CALLBACK (cb_imgur_warning_clicked), popover);
-  gtk_container_add (GTK_CONTAINER (hbox), evbox);
-  gtk_container_add (GTK_CONTAINER (evbox), imgur_warning_image);
+    evbox = gtk_event_box_new ();
+    g_signal_connect_swapped (G_OBJECT (evbox), "button-press-event",
+                              G_CALLBACK (cb_imgur_warning_clicked), popover);
+    gtk_container_add (GTK_CONTAINER (hbox), evbox);
+    gtk_container_add (GTK_CONTAINER (evbox), imgur_warning_image);
 
-  cursor = gdk_cursor_new_for_display (gdk_display_get_default (), GDK_HAND2);
-  g_signal_connect (evbox, "realize",
-                    G_CALLBACK (cb_imgur_warning_change_cursor), cursor);
-  g_object_unref (cursor);
+    cursor = gdk_cursor_new_for_display (gdk_display_get_default (), GDK_HAND2);
+    g_signal_connect (evbox, "realize",
+                      G_CALLBACK (cb_imgur_warning_change_cursor), cursor);
+    g_object_unref (cursor);
+    }
 
   /* Preview box */
   preview_box = gtk_box_new (GTK_ORIENTATION_VERTICAL, 6);
